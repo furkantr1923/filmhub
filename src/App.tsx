@@ -29,33 +29,35 @@ const Calendar = page(() => import('./pages/Calendar'));
 const Settings = page(() => import('./pages/Settings'));
 const NotFound = page(() => import('./pages/NotFound'));
 
-type RouteComponent = ComponentType<{ params: Record<string, string> }>;
+// Her sayfa kendi parametre tipini tanımlar; yönlendirici params nesnesini olduğu gibi iletir.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RouteComponent = ComponentType<any>;
 
 const ROUTES: [string, RouteComponent][] = [
-  ['/', Home as RouteComponent],
-  ['/film/:id', Detail as RouteComponent],
-  ['/dizi/:id', Detail as RouteComponent],
-  ['/dizi/:id/sezon/:season', Season as RouteComponent],
-  ['/ara', Search as RouteComponent],
-  ['/kesfet', Discover as RouteComponent],
-  ['/kesfet/:type/:genre', Discover as RouteComponent],
-  ['/liste/:slug', ListPage as RouteComponent],
-  ['/kisi/:id', Person as RouteComponent],
-  ['/kutuphane', Library as RouteComponent],
-  ['/takip', Tracker as RouteComponent],
-  ['/koleksiyonlar', Collections as RouteComponent],
-  ['/koleksiyon/:id', CollectionDetail as RouteComponent],
-  ['/istatistikler', Stats as RouteComponent],
-  ['/rastgele', RandomPicker as RouteComponent],
-  ['/karsilastir', Compare as RouteComponent],
-  ['/takvim', Calendar as RouteComponent],
-  ['/ayarlar', Settings as RouteComponent],
+  ['/', Home],
+  ['/film/:id', Detail],
+  ['/dizi/:id', Detail],
+  ['/dizi/:id/sezon/:season', Season],
+  ['/ara', Search],
+  ['/kesfet', Discover],
+  ['/kesfet/:type/:genre', Discover],
+  ['/liste/:slug', ListPage],
+  ['/kisi/:id', Person],
+  ['/kutuphane', Library],
+  ['/takip', Tracker],
+  ['/koleksiyonlar', Collections],
+  ['/koleksiyon/:id', CollectionDetail],
+  ['/istatistikler', Stats],
+  ['/rastgele', RandomPicker],
+  ['/karsilastir', Compare],
+  ['/takvim', Calendar],
+  ['/ayarlar', Settings],
 ];
 
 function Routes() {
   const { path } = useLocation();
   useScrollReset(path);
-  let Comp: RouteComponent = NotFound as RouteComponent;
+  let Comp: RouteComponent = NotFound;
   let params: Record<string, string> = {};
   for (const [pattern, c] of ROUTES) {
     const m = matchRoute(pattern, path);
