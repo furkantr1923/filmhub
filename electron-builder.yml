@@ -1,0 +1,44 @@
+# FILMHUB — Windows paketleme yapılandırması (electron-builder)
+appId: com.furkan.filmhub
+productName: FILMHUB
+copyright: Copyright © 2026 Furkan Baykal
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - build/icon.png
+  - package.json
+  - "!**/*.map"
+
+asar: true
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+# Kurulum sihirbazı (FILMHUB-Setup.exe)
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: FILMHUB
+  uninstallDisplayName: FILMHUB
+  installerLanguages: [tr_TR]
+  language: "1055"
+  # Kişisel veriler kaldırma sırasında sessizce silinmez
+  deleteAppDataOnUninstall: false
+  artifactName: FILMHUB-Setup.${ext}
+
+# Kurulumsuz tek dosya (FILMHUB-Portable.exe)
+portable:
+  artifactName: FILMHUB-Portable.${ext}

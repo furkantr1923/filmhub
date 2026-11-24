@@ -1,0 +1,15 @@
+{
+  "appId": "com.furkan.filmhub",
+  "appName": "FILMHUB",
+  "webDir": "dist",
+  "backgroundColor": "#000000",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
+}

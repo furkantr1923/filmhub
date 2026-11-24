@@ -1,0 +1,162 @@
+# FILMHUB — Sürekli entegrasyon ve dağıtım
+#
+# main dalına her gönderimde (push):
+#   1. Birim testleri ve tip denetimi çalışır
+#   2. Web üretim derlemesi alınır
+#   3. Windows: FILMHUB-Setup.exe + FILMHUB-Portable.exe üretilir (windows-latest)
+#   4. Android: imzalı FILMHUB.apk üretilir (ubuntu-latest)
+#   5. Hepsi "FILMHUB v<sürüm>" adlı GitHub Release'e eklenir
+#
+# Elle başlatmak için: Actions → "FILMHUB Build" → Run workflow
+name: FILMHUB Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: filmhub-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Testler ve tip denetimi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - name: Birim testleri
+        run: npm test
+      - name: TypeScript (strict) tip denetimi
+        run: npm run typecheck
+
+  web:
+    name: Web derlemesi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+        env:
+          FILMHUB_TMDB_KEY: ${{ secrets.FILMHUB_TMDB_KEY }}
+      - name: Paketle
+        run: cd dist && zip -qr ../FILMHUB-Web.zip .
+      - uses: actions/upload-artifact@v4
+        with: { name: FILMHUB-Web, path: FILMHUB-Web.zip }
+
+  windows:
+    name: Windows (Setup + Portable)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+        env:
+          FILMHUB_TMDB_KEY: ${{ secrets.FILMHUB_TMDB_KEY }}
+      - name: electron-builder
+        run: npx electron-builder --win --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Windows klasörünü hazırla
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path FILMHUB-Windows | Out-Null
+          Copy-Item release/FILMHUB-Setup.exe, release/FILMHUB-Portable.exe FILMHUB-Windows/
+          Compress-Archive -Path FILMHUB-Windows -DestinationPath FILMHUB-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FILMHUB-Windows
+          path: |
+            release/FILMHUB-Setup.exe
+            release/FILMHUB-Portable.exe
+            FILMHUB-Windows.zip
+
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - run: npm install --no-audit --no-fund
+      - run: pip install pillow
+      - run: npm run build
+        env:
+          FILMHUB_TMDB_KEY: ${{ secrets.FILMHUB_TMDB_KEY }}
+      - name: Android projesini oluştur ve markalaştır
+        run: |
+          npx cap add android
+          python3 scripts/android-prepare.py
+          npx cap sync android
+      - name: Release APK derle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+      - name: APK'yı imzala
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > filmhub.jks
+            PASS="$KEYSTORE_PASSWORD"
+          else
+            # Kalıcı anahtar tanımlı değilse bu derlemeye özel bir anahtar üretilir (bkz. BUILD_GUIDE.md)
+            PASS=filmhub-ci
+            keytool -genkeypair -v -keystore filmhub.jks -alias filmhub -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass $PASS -keypass $PASS -dname "CN=Furkan, O=FILMHUB, C=TR"
+          fi
+          $BT/zipalign -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          $BT/apksigner sign --ks filmhub.jks --ks-pass pass:$PASS --ks-key-alias filmhub --out FILMHUB.apk aligned.apk
+          $BT/apksigner verify --print-certs FILMHUB.apk
+          rm -f filmhub.jks
+      - uses: actions/upload-artifact@v4
+        with: { name: FILMHUB-Android, path: FILMHUB.apk }
+
+  release:
+    name: GitHub Release
+    needs: [web, windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: FILMHUB v${{ steps.v.outputs.version }}
+          body: |
+            ## FILMHUB v${{ steps.v.outputs.version }}
+            | Platform | Dosya |
+            |---|---|
+            | Windows (kurulum) | `FILMHUB-Setup.exe` |
+            | Windows (kurulumsuz) | `FILMHUB-Portable.exe` |
+            | Windows (klasör) | `FILMHUB-Windows.zip` |
+            | Android | `FILMHUB.apk` |
+            | Web | `FILMHUB-Web.zip` |
+
+            İlk açılışta ücretsiz TMDB API anahtarınızı girmeniz yeterli. Ayrıntılar: [INSTALLATION.md](docs/INSTALLATION.md)
+          files: |
+            artifacts/FILMHUB-Windows/release/FILMHUB-Setup.exe
+            artifacts/FILMHUB-Windows/release/FILMHUB-Portable.exe
+            artifacts/FILMHUB-Windows/FILMHUB-Windows.zip
+            artifacts/FILMHUB-Android/FILMHUB.apk
+            artifacts/FILMHUB-Web/FILMHUB-Web.zip
+          fail_on_unmatched_files: false

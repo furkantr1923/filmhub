@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+android/
+.test-build/
+tests/e2e/screenshots/
+tests/e2e/results.json
+.env
+*.jks
+*.keystore
+*.log
+.DS_Store
+Thumbs.db
